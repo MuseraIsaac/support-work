@@ -1,0 +1,49 @@
+---
+- name: Collect Linux operating-system inventory
+  hosts: all
+  gather_facts: false
+  strategy: free
+  vars:
+    report_dir: ./reports
+  tasks:
+    - name: Read OS release information
+      ansible.builtin.raw: |
+        set -o pipefail
+        if [ -r /etc/os-release ]; then
+          . /etc/os-release
+          printf '%s|%s|%s\n' "${NAME:-Linux}" "${VERSION_ID:-unknown}" "${PRETTY_NAME:-unknown}"
+        elif command -v lsb_release >/dev/null 2>&1; then
+          printf '%s|%s|%s\n' "$(lsb_release -si)" "$(lsb_release -sr)" "$(lsb_release -sd)"
+        else
+          printf 'Linux|unknown|unknown\n'
+        fi
+      args:
+        executable: /bin/bash
+      register: os_release
+      changed_when: false
+      failed_when: false
+
+    - name: Build normalized host record
+      ansible.builtin.set_fact:
+        inventory_record:
+          target: "{{ inventory_hostname }}"
+          reachable: "{{ os_release.rc is defined and os_release.rc == 0 }}"
+          os: "{{ (os_release.stdout | default('Linux|unknown|unknown')).split('|')[0] | trim }}"
+          version: "{{ (os_release.stdout | default('Linux|unknown|unknown')).split('|')[1] | trim }}"
+          pretty: "{{ (os_release.stdout | default('Linux|unknown|unknown')).split('|')[2] | trim }}"
+
+- name: Render one consolidated report on the controller
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure report directory exists
+      ansible.builtin.file:
+        path: "{{ report_dir | default('./reports') }}"
+        state: directory
+        mode: '0755'
+
+    - name: Render report
+      ansible.builtin.template:
+        src: ../templates/linux_os_report.j2
+        dest: "{{ report_dir | default('./reports') }}/linux_os_report.txt"
+        mode: '0644'
