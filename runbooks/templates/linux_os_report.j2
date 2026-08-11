@@ -1,0 +1,6 @@
+TARGET                                   STATUS       OS                     VERSION    DESCRIPTION
+---------------------------------------------------------------------------------------------------------------
+{% for host in groups['all'] | sort %}
+{% set r = hostvars[host].inventory_record | default({}) %}
+{{ '%-40s' | format(host) }} {{ '%-12s' | format('reachable' if r.get('reachable', false) else 'unreachable') }} {{ '%-22s' | format(r.get('os', '-')) }} {{ '%-10s' | format(r.get('version', '-')) }} {{ r.get('pretty', '-') }}
+{% endfor %}
